@@ -29,7 +29,7 @@ When this project is complete, we want to provide:
 - **Visual guides** to combination selection, including performance heatmaps
 - A simple **interactive tool** where you input a track and get personalized recommendations
 
-## 🚀 Other Details (For the Geeks)
+## 🚀 Other Details
 
 We'll be using R for our analysis:
 - **Stan** for Bayesian modeling and MCMC sampling
