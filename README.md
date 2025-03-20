@@ -1,4 +1,4 @@
-# 🏎️ Let'u Find Mario Kart 8's Ultimate Combinations: A Bayesian Adventure on the Racetrack
+# 🏎️ Let's Find Mario Kart 8's Ultimate Combinations: A Bayesian Adventure on the Racetrack
 
 **Team Members: Linn Wang, Maddy Nomer**
 
