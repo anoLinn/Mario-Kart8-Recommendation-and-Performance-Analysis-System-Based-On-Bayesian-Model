@@ -9,6 +9,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r}
+<<<<<<< HEAD
 library(tidyverse)  
 library(rstan)      
 library(loo)       
@@ -21,6 +22,20 @@ library(cowplot)
 library(corrplot)   
 library(GGally)   
 library(shiny) 
+=======
+library(tidyverse)  # 数据处理和可视化
+library(rstan)      # R与Stan的接口
+library(bayesplot)  # 贝叶斯模型可视化
+library(loo)        # 留一交叉验证
+library(gridExtra)  # 多图排列
+library(viridis)    # 可视化的颜色方案
+library(reshape2)   # 数据重塑
+library(shiny)      # 交互式应用
+library(ggplot2)    # 绘图
+library(cowplot)    # 组合图表
+library(corrplot)   # 相关性图
+library(GGally)     # 绘制对图矩阵
+>>>>>>> 6d3f1fd73f55e6053a58db9ff4493d3af11ed130
 ```
 
 ```{r}
@@ -29,7 +44,10 @@ rstan_options(auto_write = TRUE)
 ```
 
 ```{r}
+<<<<<<< HEAD
 # Load datasets
+=======
+>>>>>>> 6d3f1fd73f55e6053a58db9ff4493d3af11ed130
 drivers <- read.csv("DRIVERS.csv", stringsAsFactors = FALSE)
 vehicles <- read.csv("VEHICLES.csv", stringsAsFactors = FALSE)
 tires <- read.csv("TIRES.csv", stringsAsFactors = FALSE)
@@ -38,11 +56,15 @@ records <- read.csv("mario_kart_records_cleaned.csv", stringsAsFactors = FALSE)
 ```
 
 ```{r}
+<<<<<<< HEAD
 # Organize world record data component
+=======
+>>>>>>> 6d3f1fd73f55e6053a58db9ff4493d3af11ed130
 records$Character <- trimws(records$Character)
 records$Vehicle <- trimws(records$Vehicle)
 records$Tires <- trimws(records$Tires)
 records$Glider <- trimws(records$Glider)
+<<<<<<< HEAD
 ```
 
 ```{r}
@@ -259,17 +281,26 @@ get_glider_attributes <- function(glider_name) {
 
 ```{r}
 # Count characters 
+=======
+
+>>>>>>> 6d3f1fd73f55e6053a58db9ff4493d3af11ed130
 character_counts <- records %>%
   count(Character, sort = TRUE) %>%
   rename(Count = n)
 
+<<<<<<< HEAD
 # Count the combinations from word record
+=======
+>>>>>>> 6d3f1fd73f55e6053a58db9ff4493d3af11ed130
 combinations_counts <- records %>%
   group_by(Character, Vehicle, Tires, Glider) %>%
   summarise(Count = n(), AvgScore = mean(Score, na.rm = TRUE), .groups = 'drop') %>%
   arrange(desc(Count))
 
+<<<<<<< HEAD
 # Calculate the scores 
+=======
+>>>>>>> 6d3f1fd73f55e6053a58db9ff4493d3af11ed130
 score_stats <- records %>%
   summarise(
     MinScore = min(Score, na.rm = TRUE),
@@ -280,6 +311,7 @@ score_stats <- records %>%
 ```
 
 ```{r}
+<<<<<<< HEAD
 # Top 20 Popular Character
 ggplot(head(character_counts, 20), aes(x = reorder(Character, Count), y = Count, fill = Count)) +
   geom_bar(stat = "identity") +
@@ -289,17 +321,31 @@ ggplot(head(character_counts, 20), aes(x = reorder(Character, Count), y = Count,
        x = "Character", 
        y = "Amount") +
   theme_minimal()
+=======
+ggplot(head(character_counts, 20), aes(x = reorder(Character, Count), y = Count)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Top 20 Popular Character ",
+       x = "Character", 
+       y = "Number") +
+  theme_minimal()
+
+>>>>>>> 6d3f1fd73f55e6053a58db9ff4493d3af11ed130
 ggsave("character_frequency.png", width = 10, height = 8)
 ```
 
 ```{r}
+<<<<<<< HEAD
 # Top 10 popular combinations
+=======
+>>>>>>> 6d3f1fd73f55e6053a58db9ff4493d3af11ed130
 top_combinations <- head(combinations_counts, 10)
 top_combinations$Combination <- paste(top_combinations$Character, 
                                       top_combinations$Vehicle, 
                                       top_combinations$Tires, 
                                       top_combinations$Glider, 
                                       sep = " + ")
+<<<<<<< HEAD
 ggplot(top_combinations, aes(x = reorder(Combination, Count), y = Count, fill = Count)) +
   geom_bar(stat = "identity") +
   scale_fill_viridis_c() +
@@ -636,6 +682,26 @@ ggplot(records_with_combined_attributes,
        y = "Score") +
   theme_minimal()
 ggsave("speed_handling_ratio.png", width = 10, height = 8)
+=======
+
+ggplot(top_combinations, aes(x = reorder(Combination, Count), y = Count)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  labs(title = "世界纪录中最常用的组合（前10名）",
+       x = "组合", 
+       y = "纪录数量") +
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 8))
+
+ggsave("top_combinations.png", width = 12, height = 8)
+```
+```{r}
+
+```
+
+```{r}
+
+>>>>>>> 6d3f1fd73f55e6053a58db9ff4493d3af11ed130
 ```
 
 ```{r}
@@ -669,6 +735,7 @@ ggsave("attribute_distributions.png", width = 12, height = 10)
 ```
 
 ```{r}
+<<<<<<< HEAD
 # Preparation for STAN model
 # Improve the record data and ensure record data integrity
 records_for_model <- records_with_combined_attributes %>%
@@ -967,10 +1034,245 @@ ggplot(attr_weights_df, aes(x = Attribute, y = Weight, fill = Weight)) +
   theme(legend.position = "right")
 
 ggsave("attribute_weights.png", width = 10, height = 8)
+=======
+driver_names <- drivers$Driver
+vehicle_names <- vehicles$Vehicle
+tire_names <- tires$Tire
+glider_names <- gliders$Glider
+
+combinations <- expand.grid(
+  Driver = driver_names,
+  Vehicle = vehicle_names,
+  Tire = tire_names,
+  Glider = glider_names
+)
+
+get_attributes <- function(component_name, dataset, name_col) {
+  idx <- which(dataset[[name_col]] == component_name)
+  if (length(idx) == 0) return(NULL)
+  
+  attributes <- c("GroundSpeed", "WaterSpeed", "AirSpeed", "AntiGravitySpeed", 
+                  "Acceleration", "Weight", "GroundHandling", "WaterHandling", 
+                  "AirHandling", "AntiGravityHandling", "Traction", "MiniTurbo")
+  
+  return(as.numeric(dataset[idx, attributes]))
+}
+
+# 函数：计算组合的属性总和
+calculate_combined_attributes <- function(driver, vehicle, tire, glider) {
+  driver_attr <- get_attributes(driver, drivers, "Driver")
+  vehicle_attr <- get_attributes(vehicle, vehicles, "Vehicle")
+  tire_attr <- get_attributes(tire, tires, "Tire")
+  glider_attr <- get_attributes(glider, gliders, "Glider")
+  
+  # 属性求和
+  combined_attr <- driver_attr + vehicle_attr + tire_attr + glider_attr
+  
+  # 返回为命名向量
+  attributes <- c("GroundSpeed", "WaterSpeed", "AirSpeed", "AntiGravitySpeed", 
+                  "Acceleration", "Weight", "GroundHandling", "WaterHandling", 
+                  "AirHandling", "AntiGravityHandling", "Traction", "MiniTurbo")
+  names(combined_attr) <- attributes
+  
+  return(combined_attr)
+}
+
+set.seed(123)
+sample_size <- 5000  # 使用较小的样本量加速计算
+sampled_combinations <- combinations[sample(nrow(combinations), sample_size), ]
+
+# 计算属性
+combinations_with_attributes <- sampled_combinations %>%
+  rowwise() %>%
+  mutate(
+    attrs = list(calculate_combined_attributes(Driver, Vehicle, Tire, Glider))
+  ) %>%
+  ungroup()
+
+# 将列表列转换为单独的列
+attributes <- c("GroundSpeed", "WaterSpeed", "AirSpeed", "AntiGravitySpeed", 
+                "Acceleration", "Weight", "GroundHandling", "WaterHandling", 
+                "AirHandling", "AntiGravityHandling", "Traction", "MiniTurbo")
+
+for (attr in attributes) {
+  combinations_with_attributes[[attr]] <- sapply(combinations_with_attributes$attrs, function(x) x[attr])
+}
+
+# 删除列表列
+combinations_with_attributes <- combinations_with_attributes %>% select(-attrs)
+
+# 添加组合ID以便于引用
+combinations_with_attributes$CombinationID <- 1:nrow(combinations_with_attributes)
 ```
 
 
 ```{r}
+track_types <- tibble(
+  TrackType = c("SpeedTrack", "HandlingTrack", "BalancedTrack", "WaterTrack", "AirTrack", "AntiGravityTrack"),
+  Description = c(
+    "Track with long straight sections: Speed",
+    "Track with multiple sharp turns: Handle",
+    "Track with mixed elements",
+    "Track with extensive water sections",
+    "Track with multiple jumps and gliding sections",
+    "Track with anti-gravity sections"
+  )
+)
+
+track_weights <- tibble(
+  TrackType = track_types$TrackType,
+  GroundSpeed = c(0.3, 0.1, 0.2, 0.1, 0.1, 0.1),
+  WaterSpeed = c(0.05, 0.05, 0.1, 0.3, 0.05, 0.05),
+  AirSpeed = c(0.05, 0.05, 0.1, 0.05, 0.3, 0.05),
+  AntiGravitySpeed = c(0.05, 0.05, 0.1, 0.05, 0.05, 0.3),
+  Acceleration = c(0.1, 0.15, 0.1, 0.1, 0.1, 0.1),
+  Weight = c(0.05, 0.05, 0.05, 0.05, 0.05, 0.05),
+  GroundHandling = c(0.1, 0.25, 0.1, 0.05, 0.05, 0.05),
+  WaterHandling = c(0.05, 0.05, 0.05, 0.2, 0.05, 0.05),
+  AirHandling = c(0.05, 0.05, 0.05, 0.05, 0.2, 0.05),
+  AntiGravityHandling = c(0.05, 0.05, 0.05, 0.05, 0.05, 0.2),
+  Traction = c(0.1, 0.1, 0.05, 0.05, 0.05, 0.05),
+  MiniTurbo = c(0.05, 0.05, 0.05, 0.05, 0.05, 0.05)
+)
+```
+
+
+```{r}
+set.seed(123) 
+
+# 函数：根据赛道类型计算组合的性能得分
+calculate_performance <- function(combo_row, track_type) {
+  # 获取此赛道类型的属性权重
+  weights <- track_weights %>% 
+    filter(TrackType == track_type) %>% 
+    select(-TrackType) %>% 
+    as.numeric()
+  
+  # 获取该组合的属性
+  attributes <- combo_row %>% 
+    select(all_of(names(track_weights)[-1])) %>% 
+    as.numeric()
+  
+  # 计算加权和
+  score <- sum(attributes * weights)
+  
+  # 添加一些随机噪声（模拟玩家技能、运气等）
+  score <- score + rnorm(1, 0, 0.5)
+  
+  return(score)
+}
+
+# 为每个组合在每种赛道类型上生成性能数据
+performance_data <- expand.grid(
+  CombinationID = combinations_with_attributes$CombinationID,
+  TrackType = track_types$TrackType
+)
+
+# 与组合数据合并
+performance_data <- performance_data %>%
+  left_join(combinations_with_attributes, by = "CombinationID")
+
+# 计算性能得分
+performance_data <- performance_data %>%
+  rowwise() %>%
+  mutate(
+    PerformanceScore = calculate_performance(cur_data(), TrackType)
+  ) %>%
+  ungroup()
+
+```
+
+
+```{r}
+set.seed(456)
+sampled_combinations_for_model <- sample(unique(performance_data$CombinationID), 500)
+model_data <- performance_data %>% 
+  filter(CombinationID %in% sampled_combinations_for_model)
+
+# 将分类变量编码为整数，供Stan使用
+driver_mapping <- data.frame(
+  Driver = unique(model_data$Driver),
+  DriverID = 1:length(unique(model_data$Driver))
+)
+
+vehicle_mapping <- data.frame(
+  Vehicle = unique(model_data$Vehicle),
+  VehicleID = 1:length(unique(model_data$Vehicle))
+)
+
+tire_mapping <- data.frame(
+  Tire = unique(model_data$Tire),
+  TireID = 1:length(unique(model_data$Tire))
+)
+
+glider_mapping <- data.frame(
+  Glider = unique(model_data$Glider),
+  GliderID = 1:length(unique(model_data$Glider))
+)
+
+track_mapping <- data.frame(
+  TrackType = unique(model_data$TrackType),
+  TrackID = 1:length(unique(model_data$TrackType))
+)
+
+# 将ID添加到模型数据中
+model_data <- model_data %>%
+  left_join(driver_mapping, by = "Driver") %>%
+  left_join(vehicle_mapping, by = "Vehicle") %>%
+  left_join(tire_mapping, by = "Tire") %>%
+  left_join(glider_mapping, by = "Glider") %>%
+  left_join(track_mapping, by = "TrackType")
+
+# 准备Stan数据
+stan_data <- list(
+  N = nrow(model_data),
+  D = length(unique(model_data$DriverID)),
+  V = length(unique(model_data$VehicleID)),
+  T = length(unique(model_data$TireID)),
+  G = length(unique(model_data$GliderID)),
+  R = length(unique(model_data$TrackID)),
+  driver = model_data$DriverID,
+  vehicle = model_data$VehicleID,
+  tire = model_data$TireID,
+  glider = model_data$GliderID,
+  track = model_data$TrackID,
+  score = model_data$PerformanceScore,
+  
+  # 添加每种组件类型的属性
+  K = length(attributes),  # 属性数量
+  driver_attr = matrix(0, nrow = length(unique(model_data$DriverID)), ncol = length(attributes)),
+  vehicle_attr = matrix(0, nrow = length(unique(model_data$VehicleID)), ncol = length(attributes)),
+  tire_attr = matrix(0, nrow = length(unique(model_data$TireID)), ncol = length(attributes)),
+  glider_attr = matrix(0, nrow = length(unique(model_data$GliderID)), ncol = length(attributes))
+)
+
+# 填充组件属性
+for (i in 1:nrow(driver_mapping)) {
+  driver_row <- drivers %>% filter(Driver == driver_mapping$Driver[i])
+  stan_data$driver_attr[i,] <- as.numeric(driver_row[, attributes])
+}
+
+for (i in 1:nrow(vehicle_mapping)) {
+  vehicle_row <- vehicles %>% filter(Vehicle == vehicle_mapping$Vehicle[i])
+  stan_data$vehicle_attr[i,] <- as.numeric(vehicle_row[, attributes])
+}
+
+for (i in 1:nrow(tire_mapping)) {
+  tire_row <- tires %>% filter(Tire == tire_mapping$Tire[i])
+  stan_data$tire_attr[i,] <- as.numeric(tire_row[, attributes])
+}
+
+for (i in 1:nrow(glider_mapping)) {
+  glider_row <- gliders %>% filter(Glider == glider_mapping$Glider[i])
+  stan_data$glider_attr[i,] <- as.numeric(glider_row[, attributes])
+}
+
+>>>>>>> 6d3f1fd73f55e6053a58db9ff4493d3af11ed130
+```
+
+
+```{r}
+<<<<<<< HEAD
 # Character-Vehicle Interaction Heatmap (showing only the strongest interactions)
 # First, identify the characters and vehicles with the greatest impact
 top_characters_names <- names(sort(character_effects, decreasing = TRUE)[1:10])
@@ -990,10 +1292,15 @@ ggplot(interaction_long, aes(x = Vehicle, y = Character, fill = InteractionEffec
   labs(title = "Top Character-Vehicle Interaction Effects", x = "", y = "")
 
 ggsave("top_char_vehicle_interaction.png", width = 12, height = 8)
+=======
+
+
+>>>>>>> 6d3f1fd73f55e6053a58db9ff4493d3af11ed130
 ```
 
 
 ```{r}
+<<<<<<< HEAD
 # Combination Exploration Based on Attributes
 # Apply attribute weights to all possible combinations to find theoretically optimal combinations
 # First, create the standardization function (same as in the model)
@@ -1197,12 +1504,16 @@ write.csv(data.frame(
   Attribute = names(attr_weights),
   Weight = attr_weights
 ), "world_record_attribute_weights.csv", row.names = FALSE)
+=======
+
+>>>>>>> 6d3f1fd73f55e6053a58db9ff4493d3af11ed130
 
 ```
 
 
 
 ```{r}
+<<<<<<< HEAD
 # ============================
 # Conclusion
 # ============================
@@ -1235,7 +1546,41 @@ print(head(scored_combinations, 5))
 
 cat("\nWorst 5 recommended combinations:\n")
 print(tail(scored_combinations, 5))
+=======
+
+
+```
+
+```{r}
+
+>>>>>>> 6d3f1fd73f55e6053a58db9ff4493d3af11ed130
 
 ```
 
 
+<<<<<<< HEAD
+=======
+```{r}
+
+
+```
+
+
+```{r}
+
+
+```
+
+
+```{r}
+
+
+```
+
+
+
+```{r}
+
+
+```
+>>>>>>> 6d3f1fd73f55e6053a58db9ff4493d3af11ed130
