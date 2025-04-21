@@ -1,501 +1,307 @@
-# app.R - 马里奥赛车8贝叶斯分析展示应用
-# 将此文件保存为app.R，然后使用R Studio中的"Run App"按钮运行，
-# 或使用命令行中的shiny::runApp()函数
+# app.R
+# Mario Kart 8 Recommendation Shiny App
 
 library(shiny)
 library(shinydashboard)
-library(ggplot2)
-library(plotly)
+library(tidyverse)
 library(DT)
-library(dplyr)
-library(tidyr)
-library(corrplot)
+library(gridExtra)
+library(grid)
 library(viridis)
-library(shinythemes)
-library(shinyWidgets)
+library(ggplot2)
+library(reshape2)
 
-# ===================================
-# 加载数据函数
-# ===================================
-loadData <- function() {
-  # 如果存在预先保存的RDS文件，加载它们
-  if (file.exists("world_record_character_effects.rds")) {
-    character_effects <- readRDS("world_record_character_effects.rds")
-    vehicle_effects <- readRDS("world_record_vehicle_effects.rds")
-    tire_effects <- readRDS("world_record_tire_effects.rds")
-    glider_effects <- readRDS("world_record_glider_effects.rds")
-    attr_weights <- readRDS("world_record_attr_weights.rds")
-    char_vehicle_interaction <- readRDS("world_record_char_vehicle_interaction.rds")
-    
-    # 如果有已保存的最佳组合，也加载它
-    if (file.exists("top_50_predicted_combinations.csv")) {
-      scored_combinations <- read.csv("top_50_predicted_combinations.csv", stringsAsFactors = FALSE)
-    } else {
-      scored_combinations <- data.frame(
-        Character = character("0"),
-        Vehicle = character("0"),
-        Tires = character("0"),
-        Glider = character("0"),
-        PredictedScore = numeric("0")
-      )
-    }
-    
-  } else {
-    # 如果没有保存的结果，尝试加载原始CSV数据
-    tryCatch({
-      drivers <- read.csv("DRIVERS.csv", stringsAsFactors = FALSE)
-      vehicles <- read.csv("VEHICLES.csv", stringsAsFactors = FALSE)
-      tires <- read.csv("TIRES.csv", stringsAsFactors = FALSE)
-      gliders <- read.csv("GLIDERS.csv", stringsAsFactors = FALSE)
-      records <- read.csv("mario_kart_records_cleaned.csv", stringsAsFactors = FALSE)
-      
-      # 使用示例数据
-      set.seed(123)
-      character_effects <- setNames(
-        rnorm(50, mean = 0, sd = 0.5),
-        sample(records$Character, 50)
-      )
-      
-      vehicle_effects <- setNames(
-        rnorm(40, mean = 0, sd = 0.5),
-        sample(records$Vehicle, 40)
-      )
-      
-      tire_effects <- setNames(
-        rnorm(20, mean = 0, sd = 0.5),
-        sample(records$Tires, 20)
-      )
-      
-      glider_effects <- setNames(
-        rnorm(10, mean = 0, sd = 0.5),
-        sample(records$Glider, 10)
-      )
-      
-      attributes <- c("GroundSpeed", "WaterSpeed", "AirSpeed", "AntiGravitySpeed", 
-                      "Acceleration", "Weight", "GroundHandling", "WaterHandling", 
-                      "AirHandling", "AntiGravityHandling", "Traction", "MiniTurbo")
-      
-      attr_weights <- setNames(
-        rnorm(length(attributes), mean = 0, sd = 0.2),
-        attributes
-      )
-      
-      # 创建示例交互效应
-      char_names <- names(character_effects)
-      vehicle_names <- names(vehicle_effects)
-      char_vehicle_interaction <- matrix(
-        rnorm(length(char_names) * length(vehicle_names), mean = 0, sd = 0.3),
-        nrow = length(char_names),
-        ncol = length(vehicle_names)
-      )
-      rownames(char_vehicle_interaction) <- char_names
-      colnames(char_vehicle_interaction) <- vehicle_names
-      
-      # 创建示例组合推荐
-      top_chars <- names(sort(character_effects, decreasing = TRUE)[1:5])
-      top_vehicles <- names(sort(vehicle_effects, decreasing = TRUE)[1:5])
-      top_tires <- names(sort(tire_effects, decreasing = TRUE)[1:5])
-      top_gliders <- names(sort(glider_effects, decreasing = TRUE)[1:5])
-      
-      scored_combinations <- expand.grid(
-        Character = top_chars,
-        Vehicle = top_vehicles,
-        Tires = top_tires,
-        Glider = top_gliders
-      )
-      
-      scored_combinations$PredictedScore <- runif(nrow(scored_combinations), 0, 1)
-      scored_combinations <- scored_combinations %>% 
-        arrange(desc(PredictedScore)) %>%
-        head(50)
-    }, error = function(e) {
-      # 如果加载失败，创建默认对象
-      message("无法加载数据文件: ", e$message)
-      
-      character_effects <- setNames(rnorm(10), paste0("Character", 1:10))
-      vehicle_effects <- setNames(rnorm(10), paste0("Vehicle", 1:10))
-      tire_effects <- setNames(rnorm(10), paste0("Tire", 1:10))
-      glider_effects <- setNames(rnorm(10), paste0("Glider", 1:10))
-      attr_weights <- setNames(rnorm(5), paste0("Attr", 1:5))
-      char_vehicle_interaction <- matrix(0, nrow = 10, ncol = 10)
-      
-      scored_combinations <- data.frame(
-        Character = rep("Character1", 5),
-        Vehicle = rep("Vehicle1", 5),
-        Tires = rep("Tire1", 5),
-        Glider = rep("Glider1", 5),
-        PredictedScore = rnorm(5)
-      )
-    })
-  }
-  
-  # 返回加载的数据
-  return(list(
-    character_effects = character_effects,
-    vehicle_effects = vehicle_effects,
-    tire_effects = tire_effects,
-    glider_effects = glider_effects,
-    attr_weights = attr_weights,
-    char_vehicle_interaction = char_vehicle_interaction,
-    scored_combinations = scored_combinations
-  ))
+# Load the saved model results
+character_effects <- read.csv("world_record_character_effects.csv")
+vehicle_effects <- read.csv("world_record_vehicle_effects.csv")
+tire_effects <- read.csv("world_record_tire_effects.csv")
+glider_effects <- read.csv("world_record_glider_effects.csv")
+attribute_weights <- read.csv("world_record_attribute_weights.csv")
+top_combinations <- read.csv("top_50_predicted_combinations.csv")
+
+# Load datasets for attribute calculations
+drivers <- read.csv("DRIVERS.csv", stringsAsFactors = FALSE)
+vehicles <- read.csv("VEHICLES.csv", stringsAsFactors = FALSE)
+tires <- read.csv("TIRES.csv", stringsAsFactors = FALSE)
+gliders <- read.csv("GLIDERS.csv", stringsAsFactors = FALSE)
+
+# Define attribute columns
+attributes <- c("GroundSpeed", "WaterSpeed", "AirSpeed", "AntiGravitySpeed", 
+                "Acceleration", "Weight", "GroundHandling", "WaterHandling", 
+                "AirHandling", "AntiGravityHandling", "Traction", "MiniTurbo")
+
+# Component lookup functions
+get_driver_attributes <- function(character) {
+  driver_row <- drivers %>% filter(Driver == character)
+  if (nrow(driver_row) == 0) return(NULL)
+  return(driver_row)
 }
 
-# ===================================
-# 数据准备
-# ===================================
-# 加载数据
-data <- loadData()
+get_vehicle_attributes <- function(vehicle_name) {
+  vehicle_row <- vehicles %>% filter(Vehicle == vehicle_name)
+  if (nrow(vehicle_row) == 0) return(NULL)
+  return(vehicle_row)
+}
 
-# 提取各组件数据
-character_effects <- data$character_effects
-vehicle_effects <- data$vehicle_effects
-tire_effects <- data$tire_effects
-glider_effects <- data$glider_effects
-attr_weights <- data$attr_weights
-char_vehicle_interaction <- data$char_vehicle_interaction
-scored_combinations <- data$scored_combinations
+get_tire_attributes <- function(tire_name) {
+  tire_row <- tires %>% filter(Tire == tire_name)
+  if (nrow(tire_row) == 0) return(NULL)
+  return(tire_row)
+}
 
-# ===================================
-# Shiny UI
-# ===================================
+get_glider_attributes <- function(glider_name) {
+  glider_row <- gliders %>% filter(Glider == glider_name)
+  if (nrow(glider_row) == 0) return(NULL)
+  return(glider_row)
+}
+
+# Calculate component combo attributes
+calculate_combo_attributes <- function(character, vehicle, tire, glider) {
+  driver_attr <- get_driver_attributes(character)
+  vehicle_attr <- get_vehicle_attributes(vehicle)
+  tire_attr <- get_tire_attributes(tire)
+  glider_attr <- get_glider_attributes(glider)
+  
+  if (is.null(driver_attr) || is.null(vehicle_attr) || is.null(tire_attr) || is.null(glider_attr)) {
+    return(NULL)
+  }
+  
+  result <- numeric(length(attributes))
+  names(result) <- attributes
+  
+  for (attr in attributes) {
+    result[attr] <- driver_attr[[attr]] + vehicle_attr[[attr]] + tire_attr[[attr]] + glider_attr[[attr]]
+  }
+  
+  return(result)
+}
+
+# Load character-vehicle interaction matrix if available
+# If not available, create an empty matrix
+create_interaction_matrix <- function() {
+  if (file.exists("char_vehicle_interaction.csv")) {
+    interaction_data <- read.csv("char_vehicle_interaction.csv", row.names = 1)
+    interaction_matrix <- as.matrix(interaction_data)
+  } else {
+    chars <- character_effects$Character
+    vehs <- vehicle_effects$Vehicle
+    interaction_matrix <- matrix(0, nrow = length(chars), ncol = length(vehs))
+    rownames(interaction_matrix) <- chars
+    colnames(interaction_matrix) <- vehs
+  }
+  
+  return(interaction_matrix)
+}
+
+char_vehicle_interaction <- create_interaction_matrix()
+
+# Calculate combination score based on model
+calculate_combination_score <- function(character, vehicle, tire, glider) {
+  # Check if all components exist in the effects data
+  if (!(character %in% character_effects$Character) || 
+      !(vehicle %in% vehicle_effects$Vehicle) ||
+      !(tire %in% tire_effects$Tires) ||
+      !(glider %in% glider_effects$Glider)) {
+    return(NA)
+  }
+  
+  # Get component effects
+  char_effect <- character_effects$Effect[character_effects$Character == character]
+  veh_effect <- vehicle_effects$Effect[vehicle_effects$Vehicle == vehicle]
+  tire_effect <- tire_effects$Effect[tire_effects$Tires == tire]
+  glider_effect <- glider_effects$Effect[glider_effects$Glider == glider]
+  
+  # Check if components have attributes
+  total_attrs <- calculate_combo_attributes(character, vehicle, tire, glider)
+  if (is.null(total_attrs)) {
+    return(NA)
+  }
+  
+  # Get interaction effect if available
+  if (character %in% rownames(char_vehicle_interaction) && 
+      vehicle %in% colnames(char_vehicle_interaction)) {
+    interaction <- char_vehicle_interaction[character, vehicle]
+  } else {
+    interaction <- 0
+  }
+  
+  # Calculate attribute contribution
+  attr_contribution <- 0
+  for (i in 1:length(attributes)) {
+    attr_name <- attributes[i]
+    attr_contribution <- attr_contribution + 
+      total_attrs[attr_name] * attribute_weights$Weight[attribute_weights$Attribute == attr_name]
+  }
+  
+  # Calculate total score
+  total_score <- char_effect + veh_effect + tire_effect + glider_effect + 
+    interaction + attr_contribution
+  
+  return(total_score)
+}
+
+# UI
 ui <- dashboardPage(
-  skin = "blue",
-  
-  # 应用标题
-  dashboardHeader(title = "马里奥赛车8分析"),
-  
-  # 侧边栏菜单
+  dashboardHeader(title = "Mario Kart 8 Recommender"),
   dashboardSidebar(
     sidebarMenu(
-      menuItem("首页", tabName = "dashboard", icon = icon("dashboard")),
-      menuItem("组件效应", tabName = "component_effects", icon = icon("chart-bar")),
-      menuItem("属性权重", tabName = "attribute_weights", icon = icon("weight")),
-      menuItem("组件交互", tabName = "interactions", icon = icon("exchange-alt")),
-      menuItem("最佳组合", tabName = "best_combinations", icon = icon("trophy")),
-      menuItem("组合推荐器", tabName = "recommender", icon = icon("magic"))
+      menuItem("Recommendations", tabName = "recommendations", icon = icon("dashboard")),
+      menuItem("Components", tabName = "components", icon = icon("car")),
+      menuItem("Build Your Combo", tabName = "custom", icon = icon("wrench")),
+      menuItem("Attribute Analysis", tabName = "attributes", icon = icon("chart-bar")),
+      menuItem("About", tabName = "about", icon = icon("info-circle"))
     )
   ),
-  
-  # 主体内容
   dashboardBody(
-    # 使用主题
-    tags$head(
-      tags$link(rel = "stylesheet", type = "text/css", href = "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css"),
-      tags$style(HTML("
-        .skin-blue .main-header .logo {
-          font-weight: bold;
-          font-size: 18px;
-        }
-        .chart-container {
-          background-color: #ffffff;
-          padding: 15px;
-          border-radius: 5px;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
-          margin-bottom: 20px;
-        }
-        .value-box {
-          border-radius: 5px;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
-        }
-      "))
-    ),
-    
     tabItems(
-      # 首页
-      tabItem(tabName = "dashboard",
+      # Recommendations tab
+      tabItem(tabName = "recommendations",
               fluidRow(
                 box(
+                  title = "Top Recommended Combinations",
                   width = 12,
-                  title = "马里奥赛车8贝叶斯分析",
-                  status = "primary",
-                  solidHeader = TRUE,
-                  h4("欢迎使用马里奥赛车8贝叶斯分析系统"),
-                  p("这个应用基于贝叶斯层次模型和真实世界纪录数据，帮助您分析马里奥赛车8中的最佳组件组合。"),
-                  p("使用侧边栏导航不同部分："),
-                  tags$ul(
-                    tags$li(strong("组件效应"), "- 查看不同角色、车辆、轮胎和滑翔伞对比赛成绩的影响"),
-                    tags$li(strong("属性权重"), "- 了解速度、加速度等属性对比赛成绩的重要性"),
-                    tags$li(strong("组件交互"), "- 探索角色与车辆之间的协同效应"),
-                    tags$li(strong("最佳组合"), "- 查看模型预测的顶级组合"),
-                    tags$li(strong("组合推荐器"), "- 获取个性化组合推荐")
-                  )
-                )
-              ),
-              fluidRow(
-                valueBox(
-                  length(character_effects),
-                  "分析的角色数量",
-                  icon = icon("users"),
-                  color = "blue"
-                ),
-                valueBox(
-                  length(vehicle_effects),
-                  "分析的车辆数量",
-                  icon = icon("car"),
-                  color = "green"
-                ),
-                valueBox(
-                  nrow(scored_combinations),
-                  "预测的组合数量",
-                  icon = icon("chart-line"),
-                  color = "purple"
+                  DT::dataTableOutput("topCombosTable")
                 )
               ),
               fluidRow(
                 box(
-                  title = "顶级推荐组合",
-                  status = "primary",
-                  solidHeader = TRUE,
-                  width = 12,
-                  DTOutput("dashboard_top_combinations")
-                )
-              )
-      ),
-      
-      # 组件效应页面
-      tabItem(tabName = "component_effects",
-              fluidRow(
-                box(
-                  title = "组件类型选择",
-                  status = "primary",
-                  solidHeader = TRUE,
-                  width = 12,
-                  radioButtons(
-                    "component_type",
-                    "选择要查看的组件类型:",
-                    choices = c(
-                      "角色" = "character",
-                      "车辆" = "vehicle",
-                      "轮胎" = "tire",
-                      "滑翔伞" = "glider"
-                    ),
-                    selected = "character",
-                    inline = TRUE
-                  ),
-                  sliderInput(
-                    "num_components",
-                    "显示组件数量:",
-                    min = 5,
-                    max = 50,
-                    value = 20
-                  )
-                )
-              ),
-              fluidRow(
-                box(
-                  title = "组件效应可视化",
-                  status = "primary",
-                  solidHeader = TRUE,
-                  width = 12,
-                  plotlyOutput("component_effects_plot", height = "600px")
-                )
-              ),
-              fluidRow(
-                box(
-                  title = "组件效应数据表",
-                  status = "primary",
-                  solidHeader = TRUE,
-                  width = 12,
-                  DTOutput("component_effects_table")
-                )
-              )
-      ),
-      
-      # 属性权重页面
-      tabItem(tabName = "attribute_weights",
-              fluidRow(
-                box(
-                  title = "属性对分数的影响权重",
-                  status = "primary",
-                  solidHeader = TRUE,
-                  width = 12,
-                  plotlyOutput("attribute_weights_plot", height = "500px")
-                )
-              ),
-              fluidRow(
-                box(
-                  title = "属性权重数据",
-                  status = "primary",
-                  solidHeader = TRUE,
-                  width = 12,
-                  DTOutput("attribute_weights_table")
-                )
-              )
-      ),
-      
-      # 组件交互页面
-      tabItem(tabName = "interactions",
-              fluidRow(
-                box(
-                  title = "交互设置",
-                  status = "primary",
-                  solidHeader = TRUE,
-                  width = 12,
-                  fluidRow(
-                    column(6,
-                           sliderInput(
-                             "top_characters",
-                             "显示角色数量:",
-                             min = 5,
-                             max = min(30, length(character_effects)),
-                             value = 10
-                           )
-                    ),
-                    column(6,
-                           sliderInput(
-                             "top_vehicles",
-                             "显示车辆数量:",
-                             min = 5,
-                             max = min(30, length(vehicle_effects)),
-                             value = 10
-                           )
-                    )
-                  )
-                )
-              ),
-              fluidRow(
-                box(
-                  title = "角色-车辆交互热图",
-                  status = "primary",
-                  solidHeader = TRUE,
-                  width = 12,
-                  plotlyOutput("interaction_heatmap", height = "700px")
-                )
-              ),
-              fluidRow(
-                box(
-                  title = "最佳交互组合",
-                  status = "primary",
-                  solidHeader = TRUE,
-                  width = 12,
-                  DTOutput("top_interactions_table")
-                )
-              )
-      ),
-      
-      # 最佳组合页面
-      tabItem(tabName = "best_combinations",
-              fluidRow(
-                box(
-                  title = "模型预测的最佳组合",
-                  status = "primary",
-                  solidHeader = TRUE,
-                  width = 12,
-                  DTOutput("best_combinations_table")
-                )
-              ),
-              fluidRow(
-                box(
-                  title = "顶级组合属性比较",
-                  status = "primary",
-                  solidHeader = TRUE,
-                  width = 12,
-                  plotlyOutput("top_combos_radar", height = "600px")
-                )
-              )
-      ),
-      
-      # 组合推荐器页面
-      tabItem(tabName = "recommender",
-              fluidRow(
-                box(
-                  title = "选择您的偏好",
-                  status = "primary",
-                  solidHeader = TRUE,
-                  width = 12,
-                  fluidRow(
-                    column(3,
-                           selectInput(
-                             "preferred_character",
-                             "首选角色(可选):",
-                             choices = c("任意" = "", sort(names(character_effects))),
-                             selected = ""
-                           )
-                    ),
-                    column(3,
-                           selectInput(
-                             "preferred_vehicle",
-                             "首选车辆(可选):",
-                             choices = c("任意" = "", sort(names(vehicle_effects))),
-                             selected = ""
-                           )
-                    ),
-                    column(3,
-                           selectInput(
-                             "preferred_tire",
-                             "首选轮胎(可选):",
-                             choices = c("任意" = "", sort(names(tire_effects))),
-                             selected = ""
-                           )
-                    ),
-                    column(3,
-                           selectInput(
-                             "preferred_glider",
-                             "首选滑翔伞(可选):",
-                             choices = c("任意" = "", sort(names(glider_effects))),
-                             selected = ""
-                           )
-                    )
-                  ),
-                  fluidRow(
-                    column(4,
-                           radioButtons(
-                             "driving_style",
-                             "驾驶风格:",
-                             choices = c(
-                               "速度优先" = "speed",
-                               "加速优先" = "acceleration",
-                               "操控优先" = "handling",
-                               "平衡型" = "balanced"
-                             ),
-                             selected = "balanced"
-                           )
-                    ),
-                    column(4,
-                           sliderInput(
-                             "num_recommendations",
-                             "推荐数量:",
-                             min = 1,
-                             max = 20,
-                             value = 5
-                           )
-                    ),
-                    column(4,
-                           br(),
-                           actionButton(
-                             "generate_recommendations",
-                             "生成推荐",
-                             class = "btn-primary btn-lg",
-                             width = "100%"
-                           )
-                    )
-                  )
-                )
-              ),
-              fluidRow(
-                box(
-                  title = "推荐组合",
-                  status = "primary",
-                  solidHeader = TRUE,
-                  width = 12,
-                  DTOutput("recommended_combinations")
-                )
-              ),
-              fluidRow(
-                box(
-                  title = "顶级推荐的组件效应分解",
-                  status = "primary",
-                  solidHeader = TRUE,
+                  title = "Filter Recommendations",
                   width = 6,
-                  plotlyOutput("recommendation_effects_plot", height = "400px")
+                  selectInput("preferredCharacter", "Preferred Character:", 
+                              c("Any" = "", as.character(sort(character_effects$Character)))),
+                  selectInput("preferredVehicle", "Preferred Vehicle Type:", 
+                              c("Any" = "", 
+                                "Kart" = "kart", 
+                                "Bike" = "bike", 
+                                "ATV" = "atv")),
+                  actionButton("filterBtn", "Filter", class = "btn-primary")
                 ),
                 box(
-                  title = "顶级推荐的属性分布",
-                  status = "primary",
-                  solidHeader = TRUE,
+                  title = "Optimization Focus",
                   width = 6,
-                  plotlyOutput("recommendation_attributes_plot", height = "400px")
+                  sliderInput("speedWeight", "Speed Importance:", 
+                              min = 0, max = 1, value = 0.5, step = 0.1),
+                  sliderInput("handlingWeight", "Handling Importance:", 
+                              min = 0, max = 1, value = 0.5, step = 0.1),
+                  sliderInput("accelerationWeight", "Acceleration Importance:", 
+                              min = 0, max = 1, value = 0.5, step = 0.1),
+                  actionButton("optimizeBtn", "Optimize", class = "btn-success")
+                )
+              )
+      ),
+      
+      # Components tab
+      tabItem(tabName = "components",
+              fluidRow(
+                box(
+                  title = "Component Effects",
+                  width = 12,
+                  tabsetPanel(
+                    tabPanel("Characters", plotOutput("characterEffectsPlot")),
+                    tabPanel("Vehicles", plotOutput("vehicleEffectsPlot")),
+                    tabPanel("Tires", plotOutput("tireEffectsPlot")),
+                    tabPanel("Gliders", plotOutput("gliderEffectsPlot"))
+                  )
+                )
+              ),
+              fluidRow(
+                box(
+                  title = "属性权重分析",
+                  width = 6,
+                  plotOutput("attributeWeightsPlot")
+                ),
+                uiOutput("componentBoxUI")
+              )
+      ),
+      
+      # Custom Combo Builder tab
+      tabItem(tabName = "custom",
+              fluidRow(
+                box(
+                  title = "Build Your Custom Combination",
+                  width = 6,
+                  selectInput("customCharacter", "Character:", 
+                              as.character(sort(character_effects$Character))),
+                  selectInput("customVehicle", "Vehicle:", 
+                              as.character(sort(vehicle_effects$Vehicle))),
+                  selectInput("customTires", "Tires:", 
+                              as.character(sort(tire_effects$Tires))),
+                  selectInput("customGlider", "Glider:", 
+                              as.character(sort(glider_effects$Glider))),
+                  actionButton("evaluateBtn", "Evaluate Combination", class = "btn-primary")
+                ),
+                box(
+                  title = "Combination Score",
+                  width = 6,
+                  valueBoxOutput("comboScoreBox", width = 12),
+                  plotOutput("comboBreakdownPlot")
+                )
+              ),
+              fluidRow(
+                box(
+                  title = "Combination Attributes",
+                  width = 12,
+                  plotOutput("comboAttributesPlot", height = "300px")
+                )
+              )
+      ),
+      
+      # Attribute Analysis tab
+      tabItem(tabName = "attributes",
+              fluidRow(
+                box(
+                  title = "Attribute Correlations",
+                  width = 6,
+                  plotOutput("attrCorrelationPlot")
+                ),
+                box(
+                  title = "Attribute Distributions by Component Type",
+                  width = 6,
+                  selectInput("attrCompType", "Component Type:",
+                              c("Drivers", "Vehicles", "Tires", "Gliders")),
+                  plotOutput("attrDistributionPlot")
+                )
+              ),
+              fluidRow(
+                box(
+                  title = "Key Attribute Relationships",
+                  width = 12,
+                  tabsetPanel(
+                    tabPanel("Speed vs. Handling", plotOutput("speedVsHandlingPlot")),
+                    tabPanel("Speed vs. Acceleration", plotOutput("speedVsAccelerationPlot")),
+                    tabPanel("Speed/Handling Ratio", plotOutput("speedHandlingRatioPlot"))
+                  )
+                )
+              )
+      ),
+      
+      # About tab
+      tabItem(tabName = "about",
+              fluidRow(
+                box(
+                  title = "About This App",
+                  width = 12,
+                  tags$div(
+                    tags$h3("Mario Kart 8 Recommender System"),
+                    tags$p("This app is based on an analysis of real world record data and Bayesian hierarchical modeling to identify optimal component combinations for Mario Kart 8."),
+                    tags$p("The model incorporates:"),
+                    tags$ul(
+                      tags$li("Component main effects (character, vehicle, tire, glider)"),
+                      tags$li("Interaction effects between components"),
+                      tags$li("Attribute weights and contributions"),
+                      tags$li("Data from actual world records")
+                    ),
+                    tags$p("Use this app to:"),
+                    tags$ul(
+                      tags$li("Explore top recommended combinations"),
+                      tags$li("Understand component effects"),
+                      tags$li("Evaluate custom combinations"),
+                      tags$li("Analyze attribute relationships")
+                    ),
+                    tags$hr(),
+                    tags$p("Created with R Shiny and Stan"),
+                    tags$p("Based on Bayesian analysis of Mario Kart 8 world records")
+                  )
                 )
               )
       )
@@ -503,398 +309,608 @@ ui <- dashboardPage(
   )
 )
 
-# ===================================
-# Shiny Server
-# ===================================
+# Server
 server <- function(input, output, session) {
   
-  # 首页 - 显示顶级组合
-  output$dashboard_top_combinations <- renderDT({
-    top_combos <- head(scored_combinations, 10) %>%
-      select(Character, Vehicle, Tires, Glider, PredictedScore) %>%
-      mutate(Rank = row_number()) %>%
-      select(Rank, everything())
-    
-    datatable(
-      top_combos,
-      options = list(pageLength = 5, dom = 'tip'),
-      rownames = FALSE
-    )
+  # Top Combinations Table
+  output$topCombosTable <- DT::renderDataTable({
+    DT::datatable(top_combinations, 
+                  options = list(pageLength = 10),
+                  rownames = FALSE)
   })
   
-  # 组件效应 - 可视化
-  output$component_effects_plot <- renderPlotly({
-    # 根据选择获取相应的效应
-    effects <- switch(input$component_type,
-                      "character" = character_effects,
-                      "vehicle" = vehicle_effects,
-                      "tire" = tire_effects,
-                      "glider" = glider_effects
-    )
-    
-    # 创建数据框
-    df <- data.frame(
-      Component = names(effects),
-      Effect = effects
-    ) %>%
+  # Character Effects Plot
+  output$characterEffectsPlot <- renderPlot({
+    character_df <- character_effects %>%
       arrange(desc(Effect)) %>%
-      head(input$num_components) %>%
-      mutate(Component = factor(Component, levels = Component))
-    
-    # 创建ggplot
-    p <- ggplot(df, aes(x = reorder(Component, Effect), y = Effect, text = paste("组件: ", Component, "<br>效应: ", round(Effect, 4)))) +
-      geom_bar(stat = "identity", aes(fill = Effect)) +
-      scale_fill_viridis() +
-      coord_flip() +
-      theme_minimal() +
-      labs(title = switch(input$component_type,
-                          "character" = "角色对分数的影响",
-                          "vehicle" = "车辆对分数的影响",
-                          "tire" = "轮胎对分数的影响",
-                          "glider" = "滑翔伞对分数的影响"
-      ), 
-      x = "", 
-      y = "效应大小") +
-      theme(axis.text.y = element_text(size = 10))
-    
-    # 转换为plotly
-    ggplotly(p, tooltip = "text") %>%
-      layout(autosize = TRUE, height = 600)
-  })
-  
-  # 组件效应 - 数据表
-  output$component_effects_table <- renderDT({
-    # 根据选择获取相应的效应
-    effects <- switch(input$component_type,
-                      "character" = character_effects,
-                      "vehicle" = vehicle_effects,
-                      "tire" = tire_effects,
-                      "glider" = glider_effects
-    )
-    
-    # 创建数据框
-    df <- data.frame(
-      Component = names(effects),
-      Effect = effects
-    ) %>%
-      arrange(desc(Effect)) %>%
-      mutate(Rank = row_number()) %>%
-      select(Rank, Component, Effect)
-    
-    datatable(
-      df,
-      options = list(pageLength = 10, dom = 'Bfrtip'),
-      rownames = FALSE
-    )
-  })
-  
-  # 属性权重 - 可视化
-  output$attribute_weights_plot <- renderPlotly({
-    # 创建数据框
-    df <- data.frame(
-      Attribute = names(attr_weights),
-      Weight = attr_weights
-    ) %>%
-      arrange(desc(abs(Weight))) %>%
-      mutate(
-        Direction = ifelse(Weight > 0, "正面影响", "负面影响"),
-        Attribute = factor(Attribute, levels = Attribute)
-      )
-    
-    # 创建ggplot
-    p <- ggplot(df, aes(x = reorder(Attribute, abs(Weight)), y = Weight, 
-                        text = paste("属性: ", Attribute, "<br>权重: ", round(Weight, 4)),
-                        fill = Direction)) +
-      geom_bar(stat = "identity") +
-      scale_fill_manual(values = c("正面影响" = "#2c7bb6", "负面影响" = "#d7191c")) +
-      coord_flip() +
-      theme_minimal() +
-      labs(title = "各属性对分数的影响权重", x = "", y = "权重") +
-      theme(legend.position = "bottom")
-    
-    # 转换为plotly
-    ggplotly(p, tooltip = "text") %>%
-      layout(autosize = TRUE, height = 500)
-  })
-  
-  # 属性权重 - 数据表
-  output$attribute_weights_table <- renderDT({
-    # 创建数据框
-    df <- data.frame(
-      Attribute = names(attr_weights),
-      Weight = attr_weights,
-      AbsWeight = abs(attr_weights)
-    ) %>%
-      arrange(desc(AbsWeight)) %>%
-      select(-AbsWeight) %>%
-      mutate(
-        Direction = ifelse(Weight > 0, "正面影响", "负面影响"),
-        Rank = row_number()
-      ) %>%
-      select(Rank, Attribute, Weight, Direction)
-    
-    datatable(
-      df,
-      options = list(pageLength = length(attr_weights), dom = 'tip'),
-      rownames = FALSE
-    )
-  })
-  
-  # 组件交互 - 热图
-  output$interaction_heatmap <- renderPlotly({
-    # 获取顶级角色和车辆
-    top_chars <- names(sort(character_effects, decreasing = TRUE)[1:input$top_characters])
-    top_vehs <- names(sort(vehicle_effects, decreasing = TRUE)[1:input$top_vehicles])
-    
-    # 提取交互子矩阵
-    interaction_submatrix <- char_vehicle_interaction[top_chars, top_vehs, drop = FALSE]
-    
-    # 转为长格式
-    interaction_long <- as.data.frame(as.table(interaction_submatrix))
-    names(interaction_long) <- c("Character", "Vehicle", "InteractionEffect")
-    
-    # 创建热图
-    plot_ly(
-      x = top_vehs,
-      y = top_chars,
-      z = interaction_submatrix,
-      type = "heatmap",
-      colors = colorRamp(c("#4575b4", "white", "#d73027")),
-      text = ~paste(
-        "角色: ", interaction_long$Character, 
-        "<br>车辆: ", interaction_long$Vehicle,
-        "<br>交互效应: ", round(interaction_long$InteractionEffect, 4)
-      ),
-      hoverinfo = "text"
-    ) %>%
-      layout(
-        title = "角色-车辆交互效应热图",
-        xaxis = list(title = "车辆"),
-        yaxis = list(title = "角色"),
-        autosize = TRUE,
-        height = 700,
-        margin = list(l = 120, r = 50, b = 100, t = 50)
-      )
-  })
-  
-  # 组件交互 - 顶级交互表
-  output$top_interactions_table <- renderDT({
-    # 将交互矩阵转为长格式
-    interaction_df <- as.data.frame(as.table(char_vehicle_interaction))
-    names(interaction_df) <- c("Character", "Vehicle", "InteractionEffect")
-    
-    # 排序并获取顶级交互
-    top_interactions <- interaction_df %>%
-      arrange(desc(InteractionEffect)) %>%
       head(20) %>%
-      mutate(Rank = row_number()) %>%
-      select(Rank, Character, Vehicle, InteractionEffect)
+      mutate(Character = factor(Character, levels = Character[order(Effect, decreasing = TRUE)]))
     
-    datatable(
-      top_interactions,
-      options = list(pageLength = 10, dom = 'tip'),
-      rownames = FALSE
-    )
-  })
-  
-  # 最佳组合 - 数据表
-  output$best_combinations_table <- renderDT({
-    best_combos <- scored_combinations %>%
-      mutate(Rank = row_number()) %>%
-      select(Rank, Character, Vehicle, Tires, Glider, PredictedScore)
-    
-    datatable(
-      best_combos,
-      options = list(pageLength = 15, dom = 'frtip'),
-      rownames = FALSE
-    )
-  })
-  
-  # 最佳组合 - 雷达图
-  output$top_combos_radar <- renderPlotly({
-    # 选取前三个组合
-    top_3_combos <- head(scored_combinations, 3)
-    
-    # 假设我们有计算组合属性的函数
-    # 这里我们将模拟一些属性值
-    set.seed(42)
-    
-    # 创建一个数据框来存储属性值
-    attributes <- c("速度", "加速度", "重量", "操控性", "牵引力", "小型加速")
-    n_attrs <- length(attributes)
-    
-    # 每个组合都有不同的属性值
-    combo_1_attrs <- runif(n_attrs, 3, 5)
-    combo_2_attrs <- runif(n_attrs, 2, 5)
-    combo_3_attrs <- runif(n_attrs, 1, 5)
-    
-    # 创建雷达图数据
-    radar_data <- data.frame(
-      Attribute = rep(attributes, 3),
-      Value = c(combo_1_attrs, combo_2_attrs, combo_3_attrs),
-      Combo = c(
-        rep(paste(top_3_combos$Character[1], "+", top_3_combos$Vehicle[1]), n_attrs),
-        rep(paste(top_3_combos$Character[2], "+", top_3_combos$Vehicle[2]), n_attrs),
-        rep(paste(top_3_combos$Character[3], "+", top_3_combos$Vehicle[3]), n_attrs)
-      )
-    )
-    
-    # 创建雷达图
-    plot_ly(
-      type = 'scatterpolar',
-      fill = 'toself',
-      mode = 'lines+markers'
-    ) %>%
-      add_trace(
-        r = combo_1_attrs,
-        theta = attributes,
-        name = paste(top_3_combos$Character[1], "+", top_3_combos$Vehicle[1])
-      ) %>%
-      add_trace(
-        r = combo_2_attrs,
-        theta = attributes,
-        name = paste(top_3_combos$Character[2], "+", top_3_combos$Vehicle[2])
-      ) %>%
-      add_trace(
-        r = combo_3_attrs,
-        theta = attributes,
-        name = paste(top_3_combos$Character[3], "+", top_3_combos$Vehicle[3])
-      ) %>%
-      layout(
-        polar = list(
-          radialaxis = list(
-            visible = TRUE,
-            range = c(0, 5)
-          )
-        ),
-        title = "顶级组合属性比较",
-        showlegend = TRUE,
-        height = 600
-      )
-  })
-  
-  # 推荐系统 - 筛选组合
-  filtered_recommendations <- eventReactive(input$generate_recommendations, {
-    # 开始过滤
-    filtered <- scored_combinations
-    
-    # 应用过滤条件
-    if (input$preferred_character != "") {
-      filtered <- filtered %>% filter(Character == input$preferred_character)
-    }
-    
-    if (input$preferred_vehicle != "") {
-      filtered <- filtered %>% filter(Vehicle == input$preferred_vehicle)
-    }
-    
-    if (input$preferred_tire != "") {
-      filtered <- filtered %>% filter(Tires == input$preferred_tire)
-    }
-    
-    if (input$preferred_glider != "") {
-      filtered <- filtered %>% filter(Glider == input$preferred_glider)
-    }
-    
-    # 应用驾驶风格
-    # 注意：这里我们假设PredictedScore已经是一个平衡的分数
-    # 在实际应用中，你可能需要根据驾驶风格重新计算分数
-    
-    # 返回前N个结果
-    head(filtered, input$num_recommendations)
-  })
-  
-  # 推荐系统 - 推荐组合表
-  output$recommended_combinations <- renderDT({
-    req(filtered_recommendations())
-    
-    recommendations <- filtered_recommendations() %>%
-      mutate(Rank = row_number()) %>%
-      select(Rank, Character, Vehicle, Tires, Glider, PredictedScore)
-    
-    datatable(
-      recommendations,
-      options = list(pageLength = input$num_recommendations, dom = 'tip'),
-      rownames = FALSE
-    )
-  })
-  
-  # 推荐系统 - 组件效应分解
-  output$recommendation_effects_plot <- renderPlotly({
-    req(filtered_recommendations())
-    
-    # 获取顶级推荐
-    top_combo <- filtered_recommendations()[1, ]
-    
-    # 获取各组件效应
-    char_effect <- character_effects[top_combo$Character]
-    veh_effect <- vehicle_effects[top_combo$Vehicle]
-    tire_effect <- tire_effects[top_combo$Tires]
-    glider_effect <- glider_effects[top_combo$Glider]
-    
-    # 获取交互效应
-    interaction <- char_vehicle_interaction[top_combo$Character, top_combo$Vehicle]
-    
-    # 模拟属性贡献
-    attr_contribution <- 0.1 # 简化，实际应用中需要计算
-    
-    # 创建贡献数据框
-    contributions <- data.frame(
-      Component = c("角色", "车辆", "轮胎", "滑翔伞", "交互效应", "属性"),
-      Effect = c(char_effect, veh_effect, tire_effect, glider_effect, interaction, attr_contribution)
-    )
-    
-    # 创建条形图
-    p <- ggplot(contributions, aes(x = reorder(Component, Effect), y = Effect, 
-                                   fill = Effect > 0,
-                                   text = paste("组件: ", Component, "<br>效应: ", round(Effect, 4)))) +
+    ggplot(character_df, aes(x = Character, y = Effect, fill = Effect)) +
       geom_bar(stat = "identity") +
-      scale_fill_manual(values = c("FALSE" = "#d73027", "TRUE" = "#4575b4")) +
+      scale_fill_viridis_c() +
       coord_flip() +
       theme_minimal() +
-      labs(title = "顶级推荐的组件效应分解", x = "", y = "效应") +
-      theme(legend.position = "none")
-    
-    # 转换为plotly
-    ggplotly(p, tooltip = "text") %>%
-      layout(autosize = TRUE, height = 400)
+      labs(title = "Top 20 Character Effects on Score", x = "", y = "Effect Size")
   })
   
-  # 推荐系统 - 属性分布
-  output$recommendation_attributes_plot <- renderPlotly({
-    req(filtered_recommendations())
+  # Vehicle Effects Plot
+  output$vehicleEffectsPlot <- renderPlot({
+    vehicle_df <- vehicle_effects %>%
+      arrange(desc(Effect)) %>%
+      head(20) %>%
+      mutate(Vehicle = factor(Vehicle, levels = Vehicle[order(Effect, decreasing = TRUE)]))
     
-    # 获取顶级推荐
-    top_combo <- filtered_recommendations()[1, ]
+    ggplot(vehicle_df, aes(x = Vehicle, y = Effect, fill = Effect)) +
+      geom_bar(stat = "identity") +
+      scale_fill_viridis_c() +
+      coord_flip() +
+      theme_minimal() +
+      labs(title = "Top 20 Vehicle Effects on Score", x = "", y = "Effect Size")
+  })
+  
+  # Tire Effects Plot
+  output$tireEffectsPlot <- renderPlot({
+    tire_df <- tire_effects %>%
+      arrange(desc(Effect)) %>%
+      mutate(Tires = factor(Tires, levels = Tires[order(Effect, decreasing = TRUE)]))
     
-    # 模拟属性值
-    set.seed(as.numeric(factor(paste(top_combo$Character, top_combo$Vehicle, top_combo$Tires, top_combo$Glider))))
-    attributes <- c("速度", "加速度", "重量", "操控性", "牵引力", "小型加速")
-    attr_values <- runif(length(attributes), 1, 5)
+    ggplot(tire_df, aes(x = Tires, y = Effect, fill = Effect)) +
+      geom_bar(stat = "identity") +
+      scale_fill_viridis_c() +
+      coord_flip() +
+      theme_minimal() +
+      labs(title = "Tire Effects on Score", x = "", y = "Effect Size")
+  })
+  
+  # Glider Effects Plot
+  output$gliderEffectsPlot <- renderPlot({
+    glider_df <- glider_effects %>%
+      arrange(desc(Effect)) %>%
+      mutate(Glider = factor(Glider, levels = Glider[order(Effect, decreasing = TRUE)]))
     
-    # 创建属性数据框
-    attr_df <- data.frame(
+    ggplot(glider_df, aes(x = Glider, y = Effect, fill = Effect)) +
+      geom_bar(stat = "identity") +
+      scale_fill_viridis_c() +
+      coord_flip() +
+      theme_minimal() +
+      labs(title = "Glider Effects on Score", x = "", y = "Effect Size")
+  })
+  
+  # Attribute Weights Plot
+  output$attributeWeightsPlot <- renderPlot({
+    attr_df <- attribute_weights %>%
+      arrange(desc(abs(Weight))) %>%
+      mutate(Attribute = factor(Attribute, levels = Attribute),
+             Direction = ifelse(Weight > 0, "Positive", "Negative"))
+    
+    ggplot(attr_df, aes(x = Attribute, y = Weight, fill = Weight)) +
+      geom_bar(stat = "identity") +
+      scale_fill_gradient2(low = "#053061", mid = "white", high = "#67001F", midpoint = 0) +
+      coord_flip() +
+      theme_minimal() +
+      labs(title = "Attribute Weights Impact on Score", x = "", y = "Weight")
+  })
+  
+  # 全新的角色属性雷达图可视化
+  output$characterRadarPlot <- renderPlot({
+    req(input$interactionChar)
+    
+    # 获取选定角色的数据
+    selected_char <- input$interactionChar
+    driver_data <- get_driver_attributes(selected_char)
+    
+    if(is.null(driver_data)) {
+      return(ggplot() + 
+               annotate("text", x = 0.5, y = 0.5, label = paste("无法获取", selected_char, "的属性数据")) + 
+               theme_void())
+    }
+    
+    # 从驾驶员数据中提取属性
+    char_attrs <- data.frame(
       Attribute = attributes,
-      Value = attr_values
+      Value = as.numeric(driver_data[1, attributes])
     )
     
-    # 创建条形图
-    p <- ggplot(attr_df, aes(x = reorder(Attribute, Value), y = Value, 
-                             fill = Value,
-                             text = paste("属性: ", Attribute, "<br>值: ", round(Value, 2)))) +
+    # 创建有序因子，按照分组组织属性
+    char_attrs$Group <- case_when(
+      char_attrs$Attribute %in% c("GroundSpeed", "WaterSpeed", "AirSpeed", "AntiGravitySpeed") ~ "速度",
+      char_attrs$Attribute %in% c("GroundHandling", "WaterHandling", "AirHandling", "AntiGravityHandling") ~ "操控性",
+      char_attrs$Attribute == "Acceleration" ~ "加速度",
+      char_attrs$Attribute == "Weight" ~ "重量",
+      char_attrs$Attribute == "Traction" ~ "抓地力",
+      char_attrs$Attribute == "MiniTurbo" ~ "小型涡轮增压",
+      TRUE ~ "其他"
+    )
+    
+    # 按属性组创建分组的条形图
+    p1 <- ggplot(char_attrs, aes(x = reorder(Attribute, -Value), y = Value, fill = Group)) +
       geom_bar(stat = "identity") +
-      scale_fill_viridis() +
+      scale_fill_brewer(palette = "Set2") +
       coord_flip() +
       theme_minimal() +
-      labs(title = "顶级推荐的属性分布", x = "", y = "值") +
-      theme(legend.position = "none")
+      labs(title = paste(selected_char, "的属性分布"),
+           x = "", y = "属性值") +
+      theme(legend.title = element_blank(),
+            plot.title = element_text(size = 14, face = "bold"))
     
-    # 转换为plotly
-    ggplotly(p, tooltip = "text") %>%
-      layout(autosize = TRUE, height = 400)
+    # 获取所有驾驶员的平均值创建比较
+    all_drivers_data <- drivers[, c("Driver", attributes)]
+    
+    # 计算属性的平均值和范围
+    attr_stats <- data.frame(
+      Attribute = attributes,
+      Mean = sapply(all_drivers_data[, attributes], mean),
+      Min = sapply(all_drivers_data[, attributes], min),
+      Max = sapply(all_drivers_data[, attributes], max)
+    )
+    
+    # 合并选定角色的属性和平均值/范围
+    comparison_data <- char_attrs %>%
+      select(Attribute, Value, Group) %>%
+      left_join(attr_stats, by = "Attribute") %>%
+      mutate(
+        RelativeStrength = (Value - Mean) / (Max - Min) * 10,  # 相对强度指标
+        IsStrength = Value > Mean
+      )
+    
+    # 创建相对强度可视化
+    p2 <- ggplot(comparison_data, aes(x = reorder(Attribute, RelativeStrength), y = RelativeStrength, fill = IsStrength)) +
+      geom_bar(stat = "identity") +
+      scale_fill_manual(values = c("FALSE" = "#FF9999", "TRUE" = "#99FF99"), 
+                        labels = c("FALSE" = "弱点", "TRUE" = "强项")) +
+      coord_flip() +
+      theme_minimal() +
+      labs(title = paste(selected_char, "的相对强度分析"),
+           x = "", y = "相对强度 (与平均值比较)") +
+      theme(legend.title = element_blank(),
+            plot.title = element_text(size = 14, face = "bold"))
+    
+    # 创建建议搭配部分
+    # 基于角色弱点，推荐可以弥补这些弱点的组件
+    weaknesses <- comparison_data %>%
+      filter(RelativeStrength < 0) %>%
+      arrange(RelativeStrength) %>%
+      head(3) %>%
+      pull(Attribute)
+    
+    # 找出能弥补这些弱点的顶级车辆
+    top_complementary_vehicles <- data.frame()
+    
+    if(length(weaknesses) > 0) {
+      # 简化为仅考虑车辆
+      vehicle_scores <- data.frame()
+      
+      for(veh_name in vehicle_effects$Vehicle) {
+        veh_data <- get_vehicle_attributes(veh_name)
+        
+        if(!is.null(veh_data)) {
+          # 计算该车辆在弥补角色弱点方面的得分
+          weakness_score <- sum(as.numeric(veh_data[1, weaknesses]))
+          
+          vehicle_scores <- rbind(vehicle_scores, 
+                                  data.frame(Vehicle = veh_name, 
+                                             Score = weakness_score,
+                                             Effect = vehicle_effects$Effect[vehicle_effects$Vehicle == veh_name]))
+        }
+      }
+      
+      if(nrow(vehicle_scores) > 0) {
+        top_complementary_vehicles <- vehicle_scores %>%
+          arrange(desc(Score + Effect)) %>%
+          head(5)
+      }
+    }
+    
+    # 创建建议车辆可视化
+    if(nrow(top_complementary_vehicles) > 0) {
+      p3 <- ggplot(top_complementary_vehicles, aes(x = reorder(Vehicle, Score), y = Score, fill = Effect)) +
+        geom_bar(stat = "identity") +
+        scale_fill_viridis_c(name = "车辆效果") +
+        coord_flip() +
+        theme_minimal() +
+        labs(title = paste("推荐与", selected_char, "搭配的车辆"),
+             subtitle = paste("基于弥补以下弱点:", paste(weaknesses, collapse=", ")),
+             x = "", y = "弥补弱点的得分") +
+        theme(plot.title = element_text(size = 14, face = "bold"),
+              plot.subtitle = element_text(size = 10))
+      
+      # 组合三个图表
+      grid.arrange(p1, p2, p3, ncol = 1)
+    } else {
+      # 如果没有找到建议车辆，只展示前两个图表
+      grid.arrange(p1, p2, ncol = 1)
+    }
   })
+  
+  # 更新UI
+  output$componentBoxUI <- renderUI({
+    box(
+      title = "角色属性分析与推荐组合",
+      width = 6,
+      selectInput("interactionChar", "选择角色:",
+                  as.character(sort(character_effects$Character))),
+      p("以下可视化展示了所选角色的属性分布、相对强弱项分析，以及基于弱点的车辆推荐。"),
+      plotOutput("characterRadarPlot", height = "600px")
+    )
+  })
+  
+  # Custom Combo Evaluation
+  observeEvent(input$evaluateBtn, {
+    # Get combo score
+    combo_score <- calculate_combination_score(
+      input$customCharacter,
+      input$customVehicle,
+      input$customTires,
+      input$customGlider
+    )
+    
+    if (is.na(combo_score)) {
+      output$comboScoreBox <- renderValueBox({
+        valueBox(
+          "N/A", "Unable to calculate score - component may be missing", 
+          icon = icon("exclamation-triangle"), color = "red"
+        )
+      })
+      
+      # Empty plots if score can't be calculated
+      output$comboBreakdownPlot <- renderPlot({ NULL })
+      output$comboAttributesPlot <- renderPlot({ NULL })
+      
+    } else {
+      # Calculate percentile of this combo among top combinations
+      percentile <- round(100 * (1 - (sum(top_combinations$PredictedScore > combo_score) / nrow(top_combinations))), 1)
+      
+      output$comboScoreBox <- renderValueBox({
+        valueBox(
+          round(combo_score, 2), 
+          paste0("Combo Score (", percentile, "th percentile)"),
+          icon = icon("star"), 
+          color = if(percentile > 75) "green" else if(percentile > 50) "yellow" else "orange"
+        )
+      })
+      
+      # Get component effects for breakdown
+      char_effect <- character_effects$Effect[character_effects$Character == input$customCharacter]
+      veh_effect <- vehicle_effects$Effect[vehicle_effects$Vehicle == input$customVehicle]
+      tire_effect <- tire_effects$Effect[tire_effects$Tires == input$customTires]
+      glider_effect <- glider_effects$Effect[glider_effects$Glider == input$customGlider]
+      
+      # Get interaction effect if available
+      if (input$customCharacter %in% rownames(char_vehicle_interaction) && 
+          input$customVehicle %in% colnames(char_vehicle_interaction)) {
+        interaction <- char_vehicle_interaction[input$customCharacter, input$customVehicle]
+      } else {
+        interaction <- 0
+      }
+      
+      # Get total attributes
+      total_attrs <- calculate_combo_attributes(
+        input$customCharacter,
+        input$customVehicle,
+        input$customTires,
+        input$customGlider
+      )
+      
+      # Calculate attribute contribution
+      attr_contribution <- 0
+      for (i in 1:length(attributes)) {
+        attr_name <- attributes[i]
+        attr_contribution <- attr_contribution + 
+          total_attrs[attr_name] * attribute_weights$Weight[attribute_weights$Attribute == attr_name]
+      }
+      
+      # Create breakdown plot
+      contributions <- data.frame(
+        Component = c("Character", "Vehicle", "Tires", "Glider", "Interaction", "Attributes"),
+        Effect = c(char_effect, veh_effect, tire_effect, glider_effect, interaction, attr_contribution)
+      )
+      
+      output$comboBreakdownPlot <- renderPlot({
+        ggplot(contributions, aes(x = reorder(Component, abs(Effect)), y = Effect, fill = Effect)) +
+          geom_col() +
+          scale_fill_gradient2(low = "tomato", mid = "white", high = "steelblue", midpoint = 0) +
+          coord_flip() +
+          theme_minimal() +
+          labs(title = "Combo Score Breakdown",
+               x = "", y = "Effect")
+      })
+      
+      # Create attributes plot
+      attr_df <- data.frame(
+        Attribute = names(total_attrs),
+        Value = as.numeric(total_attrs)
+      )
+      
+      output$comboAttributesPlot <- renderPlot({
+        ggplot(attr_df, aes(x = reorder(Attribute, Value), y = Value, fill = Value)) +
+          geom_col() +
+          scale_fill_viridis_c() +
+          coord_flip() +
+          theme_minimal() +
+          labs(title = "Total Attributes for Custom Combination", x = "", y = "Value")
+      })
+    }
+  })
+  
+  # Attribute Distribution Plot by Component Type
+  output$attrDistributionPlot <- renderPlot({
+    comp_type <- input$attrCompType
+    
+    if (comp_type == "Drivers") {
+      data <- drivers
+      id_col <- "Driver"
+    } else if (comp_type == "Vehicles") {
+      data <- vehicles
+      id_col <- "Vehicle"
+    } else if (comp_type == "Tires") {
+      data <- tires
+      id_col <- "Tire"
+    } else {
+      data <- gliders
+      id_col <- "Glider"
+    }
+    
+    # Reshape data for plotting
+    long_data <- data %>%
+      select(-id_col) %>%
+      pivot_longer(cols = everything(), 
+                   names_to = "Attribute", 
+                   values_to = "Value")
+    
+    # Generate boxplot
+    ggplot(long_data, aes(x = Attribute, y = Value)) +
+      geom_boxplot(fill = "skyblue") +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+      labs(title = paste("Attribute Distributions -", comp_type),
+           y = "Value", x = "")
+  })
+  
+  # Additional attribute plots (placeholders - would need actual data to implement fully)
+  output$attrCorrelationPlot <- renderPlot({
+    # Create a correlation matrix from the attribute data
+    attr_data <- rbind(
+      drivers[, attributes],
+      vehicles[, attributes],
+      tires[, attributes],
+      gliders[, attributes]
+    )
+    
+    cormat <- cor(attr_data)
+    melted_cormat <- melt(cormat)
+    
+    ggplot(melted_cormat, aes(Var1, Var2, fill = value)) +
+      geom_tile(color = "white") +
+      scale_fill_gradient2(low = "#053061", mid = "white", high = "#67001F", 
+                           midpoint = 0, limit = c(-1,1), space = "Lab", 
+                           name="Correlation") +
+      geom_text(aes(label = ifelse(abs(value) > 0.5, round(value, 2), "")), 
+                size = 3) +
+      theme_minimal() + 
+      theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1),
+            plot.title = element_text(hjust = 0.5)) +
+      coord_fixed() +
+      labs(title = "Correlation Between Attributes",
+           x = "", y = "")
+  })
+  
+  # Speed vs. Handling Plot
+  output$speedVsHandlingPlot <- renderPlot({
+    # Create combined data with all combinations
+    all_combos <- expand.grid(
+      Character = sample(character_effects$Character, 10),
+      Vehicle = sample(vehicle_effects$Vehicle, 10),
+      Tires = sample(tire_effects$Tires, 5),
+      Glider = sample(glider_effects$Glider, 3)
+    )
+    
+    # Calculate attributes for each combo
+    combos_with_attrs <- all_combos %>%
+      rowwise() %>%
+      mutate(
+        attrs = list(calculate_combo_attributes(Character, Vehicle, Tires, Glider)),
+        GroundSpeed = if(is.null(attrs)) NA else attrs["GroundSpeed"],
+        GroundHandling = if(is.null(attrs)) NA else attrs["GroundHandling"],
+        Score = calculate_combination_score(Character, Vehicle, Tires, Glider)
+      ) %>%
+      ungroup() %>%
+      select(-attrs) %>%
+      filter(!is.na(Score), !is.na(GroundSpeed), !is.na(GroundHandling))
+    
+    # Generate plot
+    ggplot(combos_with_attrs, aes(x = GroundSpeed, y = GroundHandling, color = Score)) +
+      geom_point(alpha = 0.6) +
+      scale_color_viridis() +
+      labs(title = "Ground: Speed VS Handling", 
+           x = "Ground Speed", 
+           y = "Ground Handling",
+           color = "Score") +
+      theme_minimal()
+  })
+  
+  # Speed vs. Acceleration Plot
+  output$speedVsAccelerationPlot <- renderPlot({
+    # Similar approach as speedVsHandlingPlot but with Acceleration
+    all_combos <- expand.grid(
+      Character = sample(character_effects$Character, 10),
+      Vehicle = sample(vehicle_effects$Vehicle, 10),
+      Tires = sample(tire_effects$Tires, 5),
+      Glider = sample(glider_effects$Glider, 3)
+    )
+    
+    combos_with_attrs <- all_combos %>%
+      rowwise() %>%
+      mutate(
+        attrs = list(calculate_combo_attributes(Character, Vehicle, Tires, Glider)),
+        GroundSpeed = if(is.null(attrs)) NA else attrs["GroundSpeed"],
+        Acceleration = if(is.null(attrs)) NA else attrs["Acceleration"],
+        Score = calculate_combination_score(Character, Vehicle, Tires, Glider)
+      ) %>%
+      ungroup() %>%
+      select(-attrs) %>%
+      filter(!is.na(Score), !is.na(GroundSpeed), !is.na(Acceleration))
+    
+    ggplot(combos_with_attrs, aes(x = GroundSpeed, y = Acceleration, color = Score)) +
+      geom_point(alpha = 0.6) +
+      scale_color_viridis() +
+      labs(title = "Relationship Between Speed and Acceleration", 
+           x = "Ground Speed", 
+           y = "Acceleration",
+           color = "Score") +
+      theme_minimal()
+  })
+  
+  # Speed/Handling Ratio Plot
+  output$speedHandlingRatioPlot <- renderPlot({
+    all_combos <- expand.grid(
+      Character = sample(character_effects$Character, 10),
+      Vehicle = sample(vehicle_effects$Vehicle, 10),
+      Tires = sample(tire_effects$Tires, 5),
+      Glider = sample(glider_effects$Glider, 3)
+    )
+    
+    combos_with_attrs <- all_combos %>%
+      rowwise() %>%
+      mutate(
+        attrs = list(calculate_combo_attributes(Character, Vehicle, Tires, Glider)),
+        GroundSpeed = if(is.null(attrs)) NA else attrs["GroundSpeed"],
+        GroundHandling = if(is.null(attrs)) NA else attrs["GroundHandling"],
+        SpeedHandlingRatio = if(is.null(attrs)) NA else attrs["GroundSpeed"] / attrs["GroundHandling"],
+        Score = calculate_combination_score(Character, Vehicle, Tires, Glider)
+      ) %>%
+      ungroup() %>%
+      select(-attrs) %>%
+      filter(!is.na(Score), !is.na(SpeedHandlingRatio))
+    
+    ggplot(combos_with_attrs, aes(x = SpeedHandlingRatio, y = Score)) +
+      geom_point(alpha = 0.3) +
+      geom_smooth(method = "lm", color = "red") +
+      labs(title = "Relationship Between Speed/Handling Ratio and Score", 
+           x = "Speed/Handling Ratio", 
+           y = "Score") +
+      theme_minimal()
+  })
+  
+  # Filter recommendations
+  observeEvent(input$filterBtn, {
+    filtered_combos <- top_combinations
+    
+    # Apply character filter if provided
+    if (input$preferredCharacter != "") {
+      filtered_combos <- filtered_combos %>%
+        filter(Character == input$preferredCharacter)
+    }
+    
+    # Apply vehicle type filter if provided
+    if (input$preferredVehicle != "") {
+      # Define vehicle categories
+      kart_vehicles <- c("Standard Kart", "Pipe Frame", "Mach 8", "Steel Driver", "Cat Cruiser",
+                         "Circuit Special", "Tri-Speeder", "Badwagon", "Prancer", "Biddybuggy",
+                         "Landship", "Sneeker", "Sports Coupe", "Gold Standard", "GLA",
+                         "W 25 Silver Arrow", "300 SL Roadster", "Blue Falcon", "Tanooki Kart", "B Dasher",
+                         "Streetle", "P-Wing", "Koopa Clown")
+      
+      bike_vehicles <- c("Standard Bike", "Comet", "Sport Bike", "The Duke", "Flame Rider", 
+                         "Varmint", "Mr. Scooty", "Jet Bike", "Yoshi Bike", "Master Cycle", "City Tripper")
+      
+      atv_vehicles <- c("Standard ATV", "Wild Wiggler", "Teddy Buggy", "Bone Rattler", "Splat Buggy", "Inkstriker")
+      
+      vehicle_filter <- switch(input$preferredVehicle,
+                               "kart" = kart_vehicles,
+                               "bike" = bike_vehicles,
+                               "atv" = atv_vehicles,
+                               NULL)
+      
+      if (!is.null(vehicle_filter)) {
+        filtered_combos <- filtered_combos %>%
+          filter(Vehicle %in% vehicle_filter)
+      }
+    }
+    
+    output$topCombosTable <- DT::renderDataTable({
+      DT::datatable(filtered_combos,
+                    options = list(pageLength = 10),
+                    rownames = FALSE)
+    })
+  })
+  
+  # Optimize based on preferences
+  observeEvent(input$optimizeBtn, {
+    # Create custom attribute weights based on user preferences
+    custom_weights <- attribute_weights
+    
+    # Modify speed-related attributes
+    speed_attrs <- c("GroundSpeed", "WaterSpeed", "AirSpeed", "AntiGravitySpeed")
+    custom_weights$Weight[custom_weights$Attribute %in% speed_attrs] <- 
+      custom_weights$Weight[custom_weights$Attribute %in% speed_attrs] * input$speedWeight * 2
+    
+    # Modify handling-related attributes
+    handling_attrs <- c("GroundHandling", "WaterHandling", "AirHandling", "AntiGravityHandling", "Traction")
+    custom_weights$Weight[custom_weights$Attribute %in% handling_attrs] <- 
+      custom_weights$Weight[custom_weights$Attribute %in% handling_attrs] * input$handlingWeight * 2
+    
+    # Modify acceleration
+    custom_weights$Weight[custom_weights$Attribute == "Acceleration"] <- 
+      custom_weights$Weight[custom_weights$Attribute == "Acceleration"] * input$accelerationWeight * 2
+    
+    # Use top 500 combinations from the original list to re-score based on custom weights
+    temp_attr_weights <- custom_weights
+    
+    # Score combinations with new weights
+    custom_scored_combos <- top_combinations %>%
+      rowwise() %>%
+      mutate(
+        CustomScore = calculate_custom_score(Character, Vehicle, Tires, Glider, temp_attr_weights)
+      ) %>%
+      ungroup() %>%
+      filter(!is.na(CustomScore)) %>%
+      arrange(desc(CustomScore))
+    
+    output$topCombosTable <- DT::renderDataTable({
+      DT::datatable(custom_scored_combos %>% select(-PredictedScore) %>% rename(PredictedScore = CustomScore),
+                    options = list(pageLength = 10),
+                    rownames = FALSE)
+    })
+  })
+  
+  # Custom scoring function with different attribute weights
+  calculate_custom_score <- function(character, vehicle, tire, glider, cust_weights) {
+    # Get component effects
+    char_effect <- character_effects$Effect[character_effects$Character == character]
+    veh_effect <- vehicle_effects$Effect[vehicle_effects$Vehicle == vehicle]
+    tire_effect <- tire_effects$Effect[tire_effects$Tires == tire]
+    glider_effect <- glider_effects$Effect[glider_effects$Glider == glider]
+    
+    # Get attributes
+    total_attrs <- calculate_combo_attributes(character, vehicle, tire, glider)
+    if (is.null(total_attrs)) {
+      return(NA)
+    }
+    
+    # Get interaction effect if available
+    if (character %in% rownames(char_vehicle_interaction) && 
+        vehicle %in% colnames(char_vehicle_interaction)) {
+      interaction <- char_vehicle_interaction[character, vehicle]
+    } else {
+      interaction <- 0
+    }
+    
+    # Calculate attribute contribution with custom weights
+    attr_contribution <- 0
+    for (i in 1:length(attributes)) {
+      attr_name <- attributes[i]
+      attr_contribution <- attr_contribution + 
+        total_attrs[attr_name] * cust_weights$Weight[cust_weights$Attribute == attr_name]
+    }
+    
+    # Calculate total score
+    total_score <- char_effect + veh_effect + tire_effect + glider_effect + 
+      interaction + attr_contribution
+    
+    return(total_score)
+  }
 }
 
-# ===================================
-# 运行应用
-# ===================================
+# Run the application
 shinyApp(ui = ui, server = server)
