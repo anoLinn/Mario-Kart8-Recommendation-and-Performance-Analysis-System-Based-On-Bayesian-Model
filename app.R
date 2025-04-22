@@ -206,7 +206,7 @@ ui <- dashboardPage(
               ),
               fluidRow(
                 box(
-                  title = "属性权重分析",
+                  title = "Attribute Weight Analysis",
                   width = 6,
                   plotOutput("attributeWeightsPlot")
                 ),
@@ -392,52 +392,52 @@ server <- function(input, output, session) {
       labs(title = "Attribute Weights Impact on Score", x = "", y = "Weight")
   })
   
-  # 全新的角色属性雷达图可视化
+  # New character attribute radar plot visualization
   output$characterRadarPlot <- renderPlot({
     req(input$interactionChar)
     
-    # 获取选定角色的数据
+    # Get data for selected character
     selected_char <- input$interactionChar
     driver_data <- get_driver_attributes(selected_char)
     
     if(is.null(driver_data)) {
       return(ggplot() + 
-               annotate("text", x = 0.5, y = 0.5, label = paste("无法获取", selected_char, "的属性数据")) + 
+               annotate("text", x = 0.5, y = 0.5, label = paste("Cannot retrieve attribute data for", selected_char)) + 
                theme_void())
     }
     
-    # 从驾驶员数据中提取属性
+    # Extract attributes from driver data
     char_attrs <- data.frame(
       Attribute = attributes,
       Value = as.numeric(driver_data[1, attributes])
     )
     
-    # 创建有序因子，按照分组组织属性
+    # Create ordered factor by grouping attributes
     char_attrs$Group <- case_when(
-      char_attrs$Attribute %in% c("GroundSpeed", "WaterSpeed", "AirSpeed", "AntiGravitySpeed") ~ "速度",
-      char_attrs$Attribute %in% c("GroundHandling", "WaterHandling", "AirHandling", "AntiGravityHandling") ~ "操控性",
-      char_attrs$Attribute == "Acceleration" ~ "加速度",
-      char_attrs$Attribute == "Weight" ~ "重量",
-      char_attrs$Attribute == "Traction" ~ "抓地力",
-      char_attrs$Attribute == "MiniTurbo" ~ "小型涡轮增压",
-      TRUE ~ "其他"
+      char_attrs$Attribute %in% c("GroundSpeed", "WaterSpeed", "AirSpeed", "AntiGravitySpeed") ~ "Speed",
+      char_attrs$Attribute %in% c("GroundHandling", "WaterHandling", "AirHandling", "AntiGravityHandling") ~ "Handling",
+      char_attrs$Attribute == "Acceleration" ~ "Acceleration",
+      char_attrs$Attribute == "Weight" ~ "Weight",
+      char_attrs$Attribute == "Traction" ~ "Traction",
+      char_attrs$Attribute == "MiniTurbo" ~ "Mini-Turbo",
+      TRUE ~ "Other"
     )
     
-    # 按属性组创建分组的条形图
+    # Create grouped bar chart by attribute category
     p1 <- ggplot(char_attrs, aes(x = reorder(Attribute, -Value), y = Value, fill = Group)) +
       geom_bar(stat = "identity") +
       scale_fill_brewer(palette = "Set2") +
       coord_flip() +
       theme_minimal() +
-      labs(title = paste(selected_char, "的属性分布"),
-           x = "", y = "属性值") +
+      labs(title = paste(selected_char, "Attribute Distribution"),
+           x = "", y = "Attribute Value") +
       theme(legend.title = element_blank(),
             plot.title = element_text(size = 14, face = "bold"))
     
-    # 获取所有驾驶员的平均值创建比较
+    # Get all driver averages for comparison
     all_drivers_data <- drivers[, c("Driver", attributes)]
     
-    # 计算属性的平均值和范围
+    # Calculate means and ranges for attributes
     attr_stats <- data.frame(
       Attribute = attributes,
       Mean = sapply(all_drivers_data[, attributes], mean),
@@ -445,47 +445,47 @@ server <- function(input, output, session) {
       Max = sapply(all_drivers_data[, attributes], max)
     )
     
-    # 合并选定角色的属性和平均值/范围
+    # Merge selected character attributes with average/range
     comparison_data <- char_attrs %>%
       select(Attribute, Value, Group) %>%
       left_join(attr_stats, by = "Attribute") %>%
       mutate(
-        RelativeStrength = (Value - Mean) / (Max - Min) * 10,  # 相对强度指标
+        RelativeStrength = (Value - Mean) / (Max - Min) * 10,  # Relative strength metric
         IsStrength = Value > Mean
       )
     
-    # 创建相对强度可视化
+    # Create relative strength visualization
     p2 <- ggplot(comparison_data, aes(x = reorder(Attribute, RelativeStrength), y = RelativeStrength, fill = IsStrength)) +
       geom_bar(stat = "identity") +
       scale_fill_manual(values = c("FALSE" = "#FF9999", "TRUE" = "#99FF99"), 
-                        labels = c("FALSE" = "弱点", "TRUE" = "强项")) +
+                        labels = c("FALSE" = "Weakness", "TRUE" = "Strength")) +
       coord_flip() +
       theme_minimal() +
-      labs(title = paste(selected_char, "的相对强度分析"),
-           x = "", y = "相对强度 (与平均值比较)") +
+      labs(title = paste(selected_char, "Relative Strength Analysis"),
+           x = "", y = "Relative Strength (vs Average)") +
       theme(legend.title = element_blank(),
             plot.title = element_text(size = 14, face = "bold"))
     
-    # 创建建议搭配部分
-    # 基于角色弱点，推荐可以弥补这些弱点的组件
+    # Create recommended combo section
+    # Based on character weaknesses, recommend components that can offset those weaknesses
     weaknesses <- comparison_data %>%
       filter(RelativeStrength < 0) %>%
       arrange(RelativeStrength) %>%
       head(3) %>%
       pull(Attribute)
     
-    # 找出能弥补这些弱点的顶级车辆
+    # Find top complementary vehicles
     top_complementary_vehicles <- data.frame()
     
     if(length(weaknesses) > 0) {
-      # 简化为仅考虑车辆
+      # Simplify to consider only vehicles
       vehicle_scores <- data.frame()
       
       for(veh_name in vehicle_effects$Vehicle) {
         veh_data <- get_vehicle_attributes(veh_name)
         
         if(!is.null(veh_data)) {
-          # 计算该车辆在弥补角色弱点方面的得分
+          # Calculate vehicle's score in offsetting character weaknesses
           weakness_score <- sum(as.numeric(veh_data[1, weaknesses]))
           
           vehicle_scores <- rbind(vehicle_scores, 
@@ -502,35 +502,34 @@ server <- function(input, output, session) {
       }
     }
     
-    # 创建建议车辆可视化
+    # Create vehicle recommendation visualization
     if(nrow(top_complementary_vehicles) > 0) {
       p3 <- ggplot(top_complementary_vehicles, aes(x = reorder(Vehicle, Score), y = Score, fill = Effect)) +
         geom_bar(stat = "identity") +
-        scale_fill_viridis_c(name = "车辆效果") +
+        scale_fill_viridis_c(name = "Vehicle Effect") +
         coord_flip() +
         theme_minimal() +
-        labs(title = paste("推荐与", selected_char, "搭配的车辆"),
-             subtitle = paste("基于弥补以下弱点:", paste(weaknesses, collapse=", ")),
-             x = "", y = "弥补弱点的得分") +
+        labs(title = paste("Recommended Vehicles to Pair with", selected_char),
+             subtitle = paste("Based on offsetting weaknesses:", paste(weaknesses, collapse=", ")),
+             x = "", y = "Weakness Compensation Score") +
         theme(plot.title = element_text(size = 14, face = "bold"),
               plot.subtitle = element_text(size = 10))
       
-      # 组合三个图表
+      # Combine three charts
       grid.arrange(p1, p2, p3, ncol = 1)
     } else {
-      # 如果没有找到建议车辆，只展示前两个图表
+      # If no recommended vehicles found, show only first two charts
       grid.arrange(p1, p2, ncol = 1)
     }
   })
   
-  # 更新UI
+  # Update UI
   output$componentBoxUI <- renderUI({
     box(
-      title = "角色属性分析与推荐组合",
+      title = "Character Analysis and Combination Recommendations",
       width = 6,
-      selectInput("interactionChar", "选择角色:",
+      selectInput("interactionChar", "Select Character:",
                   as.character(sort(character_effects$Character))),
-      p("以下可视化展示了所选角色的属性分布、相对强弱项分析，以及基于弱点的车辆推荐。"),
       plotOutput("characterRadarPlot", height = "600px")
     )
   })
