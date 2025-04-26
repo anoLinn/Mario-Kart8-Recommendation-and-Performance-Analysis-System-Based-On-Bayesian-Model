@@ -1,0 +1,10 @@
+name: mario-kart-recommender
+title:
+username: marioapp-stt812
+account: marioapp-stt812
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 14581452
+bundleId: 10158515
+url: https://marioapp-stt812.shinyapps.io/mario-kart-recommender/
+version: 1
